@@ -82,6 +82,7 @@ def main():
 
         selected_os = check_device_result.get("selected_os")
         device_ip = check_device_result.get("device_ip")
+        os.environ["DEVICE_IP"] = device_ip
 
         if selected_os and device_ip:
             script_name = f"{selected_os.replace(' ', '_')}.py"
@@ -89,8 +90,10 @@ def main():
             
             if os.path.exists(script_path):
                 print(messages['found_script'].format(script=script_path))
+                # print(f"Debug: DEVICE_IP before exec = {device_ip}")  # 添加调试信息
                 # 加载并执行脚本
                 exec(open(script_path).read(), {'__name__': '__main__', 'DEVICE_IP': device_ip})
+                # print(f"Debug: Script {script_name} executed.")  # 添加调试信息
             else:
                 print(messages['not_found_script'].format(script=script_name))
         else:
