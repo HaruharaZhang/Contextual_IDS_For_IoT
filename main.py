@@ -38,6 +38,7 @@ def main():
         lang = 'en'
 
     messages = get_messages(lang)
+    os.environ["LANGUAGE"] = lang
 
     if not is_admin():
         print(messages['admin_required'])
@@ -63,44 +64,74 @@ def main():
         print(f"{idx + 1}. {device[2]} ({device[0]})")
     
     # 用户选择设备
-    choice = int(input(messages['select_device'])) - 1
-    if choice < 0 or choice >= len(devices):
-        print(messages['invalid_choice'])
-        return
-
-    selected_device = devices[choice]
-    print(messages['scanning_device'].format(vendor=selected_device[2], mac=selected_device[1], host=selected_device[0]))
-
-    # 使用当前的 Python 解释器调用 `checkDevice.py` 并捕获其输出
-    env = os.environ.copy()
-    env["DEVICE"] = json.dumps(selected_device)
-    env["LANGUAGE"] = lang
-
     try:
-        check_device_output = subprocess.check_output([sys.executable, "checkDevice.py"], env=env, universal_newlines=True)
-        check_device_result = json.loads(check_device_output)
+        choice = int(input(messages['select_device'])) - 1
+        if choice < 0 or choice >= len(devices):
+            print(messages['invalid_choice'])
+            return
 
-        selected_os = check_device_result.get("selected_os")
-        device_ip = check_device_result.get("device_ip")
-        os.environ["DEVICE_IP"] = device_ip
+        selected_device = devices[choice]
+        device_ip = selected_device[0]  # 假设设备的IP存储在列表的第一个元素
+        os.environ["DEVICE_IP"] = device_ip  # 设置环境变量
+        print(f"Selected device IP {device_ip} has been stored in environment variable.")
+    except ValueError:
+        print("Invalid input. Please enter a number.")
+    except IndexError:
+        print("No device at this number. Please enter a valid device number.")
 
-        if selected_os and device_ip:
-            script_name = f"{selected_os.replace(' ', '_')}.py"
-            script_path = os.path.join('Script', script_name)
-            
-            if os.path.exists(script_path):
-                print(messages['found_script'].format(script=script_path))
-                # print(f"Debug: DEVICE_IP before exec = {device_ip}")  # 添加调试信息
-                # 加载并执行脚本
-                exec(open(script_path).read(), {'__name__': '__main__', 'DEVICE_IP': device_ip})
-                # print(f"Debug: Script {script_name} executed.")  # 添加调试信息
-            else:
-                print(messages['not_found_script'].format(script=script_name))
-        else:
-            print(messages['no_os_match'])
+    # 设备扫描脚本
+    script_directory = 'Script'
+    scripts = [f for f in os.listdir(script_directory) if f.endswith('.py')]
+    print(messages['loading_scripts'])
+    for idx, script in enumerate(scripts):
+        print(f"{idx + 1}. {script}")
+
+    # 用户选择脚本
+    script_choice = input(messages['select_script'])
+    try:
+        script_index = int(script_choice) - 1
+        if script_index < 0 or script_index >= len(scripts):
+            print(messages['invalid_choice'])
+            return
+
+        # 运行选定的脚本
+        script_path = os.path.join('Script', scripts[script_index])
+        print(f"Running {script_path}...")
+        subprocess.run([sys.executable, script_path], check=True)
+        print("Script executed successfully.")
+    except ValueError:
+        print("Please enter a valid number.")
     except subprocess.CalledProcessError as e:
-        print(f"Error executing checkDevice.py: {e}")
-        print(f"Output: {e.output}")
+        print(f"Error executing {scripts[script_index]}: {e}")
+
+    
+    # Model加载
+    try:
+        script_directory = 'Model'  # 设定脚本所在的目录
+        scripts = [f for f in os.listdir(script_directory) if f.endswith('.py')]
+        if not scripts:
+            print("No scripts found in the 'Model' directory.")
+            return
+        
+        print("Available scripts in the 'Model' directory:")
+        for idx, script in enumerate(scripts):
+            print(f"{idx + 1}. {script}")
+        
+        script_choice = input("Enter the number of the script you want to run: ")
+        script_index = int(script_choice) - 1
+        
+        if script_index < 0 or script_index >= len(scripts):
+            print("Invalid choice. Please select a valid script number.")
+            return
+        
+        script_path = os.path.join(script_directory, scripts[script_index])
+        print(f"Running {script_path}...")
+        subprocess.run([sys.executable, script_path], check=True)
+        print("Script executed successfully.")
+    except ValueError:
+        print("Invalid input. Please enter a number.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing {scripts[script_index]}: {e}")
 
 if __name__ == "__main__":
     main()

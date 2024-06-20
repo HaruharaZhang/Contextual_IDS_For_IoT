@@ -3,8 +3,14 @@ import json
 import time
 import urllib3
 import os
+import sys
 import pymysql
 from configparser import ConfigParser
+
+# 添加父目录到 sys.path 以便可以导入其他模块
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
 from messageLoader import get_messages
 
 # 忽略不安全请求警告
@@ -22,6 +28,21 @@ def get_db_config():
     }
     return db_config
 
+# 清空指定数据库中的表格，但不删除表格本身。
+def clear_table(dbname, table_name):
+    conn = connect_db(dbname)
+    cursor = conn.cursor()
+    # 如果表名是SQL保留字或包含特殊字符，使用反引号包围表名
+    safe_table_name = f"`{table_name}`" if table_name == "groups" else table_name
+    try:
+        cursor.execute(f"DELETE FROM {safe_table_name}")
+        conn.commit()
+        # print(f"Table {safe_table_name} cleared successfully.")
+    except pymysql.MySQLError as e:
+        print(f"Error clearing table {safe_table_name}: {e}")
+    finally:
+        conn.close()
+
 # 连接数据库
 def connect_db(dbname):
     db_config = get_db_config()
@@ -35,6 +56,28 @@ def connect_db(dbname):
         cursorclass=pymysql.cursors.DictCursor
     )
     return conn
+
+# 统计数据库中各个表的记录总数。
+def count_records(dbname):
+    conn = connect_db(dbname)
+    cursor = conn.cursor()
+    tables = ['lights', 'groups', 'sensors', 'scenes', 'rules']  # 添加你需要统计的表名
+    counts = {}
+    
+    try:
+        for table in tables:
+            safe_table_name = f"`{table}`" if table == "groups" else table
+            cursor.execute(f"SELECT COUNT(*) AS count FROM {safe_table_name}")
+            result = cursor.fetchone()
+            counts[table] = result['count']
+            print(f"Total {table}: {result['count']}")
+    except pymysql.MySQLError as e:
+        print(f"Error counting records: {e}")
+    finally:
+        conn.close()
+    
+    return counts
+
 
 def create_database_and_tables(dbname, messages):
     db_config = get_db_config()
@@ -326,6 +369,7 @@ def fetch_and_store_data(ip, username, endpoint, table_name, dbname, messages):
             return
         conn = connect_db(dbname)
         cursor = conn.cursor()
+        clear_table(dbname, table_name) # 清空表格内容
         for item_id, item_data in data.items():
             try:
                 if table_name == 'lights':
@@ -394,6 +438,7 @@ def fetch_all_data(ip, username, dbname, messages):
     endpoints = ['lights', 'groups', 'schedules', 'scenes', 'sensors', 'rules']
     for endpoint in endpoints:
         fetch_and_store_data(ip, username, endpoint, endpoint, dbname, messages)
+    count_records(dbname)
 
 def get_data(device_ip, messages, dbname):
     """获取设备数据并创建用户"""
@@ -418,6 +463,68 @@ def get_data(device_ip, messages, dbname):
     else:
         create_hue_user(ip, messages, dbname)
 
+def fetch_and_store_device_states(ip, dbname):
+    # 连接数据库并查询所有用户名和设备ID
+    conn = connect_db(dbname)
+    cursor = conn.cursor()
+
+    # 创建 device_states 表格，如果尚未存在
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS device_states (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            device_id VARCHAR(255),
+            state JSON,
+            reachable BOOLEAN,
+            api_url VARCHAR(255),
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+
+    try:
+        clear_table(dbname, "device_states") # 清空表格内容
+        # 获取用户名，这里假设每个IP对应一个用户名
+        cursor.execute("SELECT username FROM users WHERE ip = %s LIMIT 1", (ip,))
+        user_result = cursor.fetchone()
+        if not user_result:
+            print("No username found for the given IP.")
+            return
+
+        username = user_result['username']
+
+        # 获取所有设备ID
+        cursor.execute("SELECT light_id FROM lights")
+        devices = cursor.fetchall()
+        if not devices:
+            print("No devices found.")
+            return
+
+        # 对每个设备抓取和存储状态
+        for device in devices:
+            device_id = device['light_id']
+            url = f"https://{ip}/api/{username}/lights/{device_id}"
+            response = requests.get(url, verify=False)  # 跳过SSL验证
+            if response.status_code == 200:
+                data = response.json()
+                state = json.dumps(data)  # 将JSON响应转换为字符串
+                reachable = data['state']['reachable']  # 获取reachable状态
+
+                # 存储设备状态
+                cursor.execute('''
+                    INSERT INTO device_states (device_id, state, reachable, api_url)
+                    VALUES (%s, %s, %s, %s)
+                ''', (device_id, state, reachable, url))
+                conn.commit()
+                print(f"State for device {device_id} stored successfully.")
+            else:
+                print(f"Failed to fetch state for device {device_id}: {response.status_code}")
+
+    except pymysql.MySQLError as e:
+        print(f"Database error: {e}")
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     # 定义数据库名称
     dbname = 'philips_hue_bridge_db'
@@ -433,3 +540,6 @@ if __name__ == "__main__":
     device_ip = os.getenv('DEVICE_IP')
     print(messages['retrieved_device_ip'], device_ip)
     get_data(device_ip, messages, dbname)
+
+    # 抓取并存储所有设备状态
+    fetch_and_store_device_states(device_ip, dbname)
