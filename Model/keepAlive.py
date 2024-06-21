@@ -6,10 +6,12 @@ import pymysql
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
+# philips_hue_bridge_db -> philips_hue_bridge 的每秒扫描间隔
+
 def load_config():
     config = configparser.ConfigParser()
     config.read('Config/Model/keepAlive.cfg')
-    scan_interval = float(config['Settings']['scan_interval'])
+    philips_hue_bridge_db = float(config['Settings']['philips_hue_bridge_db'])
     
     config.read('Config/database.cfg')
     db_user = config['Database']['user']
@@ -17,7 +19,7 @@ def load_config():
     db_host = config['Database']['host']
     exclude_databases = [db.strip() for db in config['Database']['exclude_databases'].split(',')]
     
-    return scan_interval, db_user, db_password, db_host, exclude_databases
+    return philips_hue_bridge_db, db_user, db_password, db_host, exclude_databases
 
 def get_databases(conn, exclude_databases):
     with conn.cursor() as cursor:
