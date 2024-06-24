@@ -472,6 +472,7 @@ def fetch_and_store_device_states(ip, dbname):
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS device_states (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            device_name VARCHAR(255), 
             device_id VARCHAR(255),
             state JSON,
             reachable BOOLEAN,
@@ -508,12 +509,13 @@ def fetch_and_store_device_states(ip, dbname):
                 data = response.json()
                 state = json.dumps(data)  # 将JSON响应转换为字符串
                 reachable = data['state']['reachable']  # 获取reachable状态
+                device_name = data['name']
 
                 # 存储设备状态
                 cursor.execute('''
-                    INSERT INTO device_states (device_id, state, reachable, api_url)
-                    VALUES (%s, %s, %s, %s)
-                ''', (device_id, state, reachable, url))
+                    INSERT INTO device_states (device_name, device_id, state, reachable, api_url)
+                    VALUES (%s, %s, %s, %s, %s)
+                ''', (device_name, device_id, state, reachable, url))
                 conn.commit()
                 print(f"State for device {device_id} stored successfully.")
             else:

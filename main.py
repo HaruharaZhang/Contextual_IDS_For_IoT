@@ -23,7 +23,7 @@ def is_admin():
             return False
 def main():
     # 选择语言
-    print("请选择一种语言:")
+    print("Choose a language: ")
     print("1. 中文")
     print("2. English")
     choice = input().strip()
@@ -33,7 +33,7 @@ def main():
     elif choice == '2':
         lang = 'en'
     else:
-        print("选择无效。默认使用英语。")
+        print("Default: languahe -> English")
         lang = 'en'
 
     messages = get_messages(lang)
@@ -62,7 +62,7 @@ def main():
 
         # 显示设备选择菜单
         print(messages['device_menu'])
-        print("0. 进入模型选择页面")
+        print("0. [RUN] Model select")
         for idx, device in enumerate(devices):
             device_display = f"{idx + 1}. {device[2]} ({device[0]})"
             if device[0] in executed_devices:
@@ -74,7 +74,7 @@ def main():
             choice = int(input(messages['select_device']))
             if choice == 0:
                 if not devices_executed:
-                    print("\033[91m请先选择至少一个设备并执行脚本。\033[0m")  # 使用红色字体提示
+                    print("\033[91mYou need at LEAST select one script to run b4 you select a model\033[0m")  # 使用红色字体提示
                     continue
                 else:
                     break  # 退出循环进入模型加载部分
