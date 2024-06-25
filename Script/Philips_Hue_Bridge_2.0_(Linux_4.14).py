@@ -252,7 +252,7 @@ def insert_username(dbname, ip, username, messages):
         VALUES (%s, %s)
     ''', (ip, username))
     conn.commit()
-    print(messages['insert_success'])  # 添加成功插入后的提示信息
+    #print(messages['insert_success'])  # 添加成功插入后的提示信息
     conn.close()
 
 # 获取配置并存储到数据库
@@ -283,7 +283,7 @@ def store_config_details(dbname, username, config_data, messages):
     ))
     conn.commit()
     conn.close()
-    print(messages['config_stored'])
+    #print(messages['config_stored'])
 
 # 从API获取配置
 def get_config(ip, username):
@@ -354,7 +354,7 @@ def compare_and_update_config(dbname, ip, username, new_config, messages):
                 '''.format(f'`{key}`'), (value, username))
                 conn.commit()
                 print(f"{messages['config_updated']} {key}")
-        print(messages['config_check_complete'])
+        #print(messages['config_check_complete'])
     else:
         store_config_details(dbname, username, new_config, messages)
     conn.close()
@@ -430,7 +430,7 @@ def fetch_and_store_data(ip, username, endpoint, table_name, dbname, messages):
                 print(f"Error inserting {endpoint[:-1]} {item_id}: {e}")
         conn.commit()
         conn.close()
-        print(messages[f'{endpoint}_stored'])
+        #print(messages[f'{endpoint}_stored'])
     else:
         print(messages[f'{endpoint}_failed'], response.status_code, response.text)
 
@@ -517,7 +517,7 @@ def fetch_and_store_device_states(ip, dbname):
                     VALUES (%s, %s, %s, %s, %s)
                 ''', (device_name, device_id, state, reachable, url))
                 conn.commit()
-                print(f"State for device {device_id} stored successfully.")
+                #print(f"State for device {device_id} stored successfully.")
             else:
                 print(f"Failed to fetch state for device {device_id}: {response.status_code}")
 

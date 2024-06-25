@@ -1,5 +1,6 @@
 import configparser
 import time
+import datetime
 import os
 import requests
 import pymysql
@@ -81,7 +82,7 @@ def check_devices(devices, timeout):
             # Compare and log state changes
             db_reachable = bool(device['reachable'])
             if db_reachable != current_reachable:
-                warning_msg = f"Alert: Device '{device_name}' reachable changed! Database state: {db_reachable}, Current state: {current_reachable}"
+                warning_msg = f"[Alert][{datetime.datetime.now()}] Device '{device_name}' reachable changed! Database state: {db_reachable}, Current state: {current_reachable}"
                 print(colored(warning_msg, 'red'))
                 state_changes.append({
                     'api_url': device['api_url'],
@@ -103,7 +104,7 @@ def check_devices(devices, timeout):
                     db_reachable = bool(device['reachable'])
 
                     if db_reachable != current_reachable:
-                        warning_msg = f"Alert: Device '{device_name}' reachable changed! Database state: {db_reachable}, Current state: {current_reachable}"
+                        warning_msg = f"[Alert][{datetime.datetime.now()}] Device '{device_name}' reachable changed! Database state: {db_reachable}, Current state: {current_reachable}"
                         print(colored(warning_msg, 'red'))
                         state_changes.append({
                             'api_url': device['api_url'],

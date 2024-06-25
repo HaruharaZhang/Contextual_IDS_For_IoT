@@ -4,6 +4,7 @@ import ctypes
 import subprocess
 import json
 from messageLoader import get_messages
+from concurrent.futures import ThreadPoolExecutor
 
 # 确保当前目录在系统路径中以便导入 getDevice
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -129,21 +130,28 @@ def main():
     for idx, model in enumerate(models):
         print(f"{idx + 1}. {model}")
 
-    model_choice = input("Enter the number of the model script you want to run: ")
-    try:
-        model_index = int(model_choice) - 1
-        if model_index < 0 or model_index >= len(models):
-            print("Invalid choice. Please select a valid model number.")
-            return
+    model_choice = input("Enter the number of the model script you want to run, separated by commas (e.g., 1,3): ")
+    model_indices = model_choice.split(',')
 
-        model_path = os.path.join(model_directory, models[model_index])
-        print(f"Running {model_path}...")
-        subprocess.run([sys.executable, model_path], check=True)
-        print("Model script executed successfully.")
-    except ValueError:
-        print("Invalid input. Please enter a number.")
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing {models[model_index]}: {e}")
+    def run_model(model_index):
+        try:
+            model_index = int(model_index.strip()) - 1
+            if model_index < 0 or model_index >= len(models):
+                print(f"Invalid choice: {model_index + 1}. Please select a valid model number.")
+                return
+
+            model_path = os.path.join(model_directory, models[model_index])
+            print(f"Running {model_path}...")
+            subprocess.run([sys.executable, model_path], check=True)
+            print(f"Model script {model_path} executed successfully.")
+        except ValueError:
+            print(f"Invalid input: {model_index + 1}. Please enter a number.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error executing {models[model_index]}: {e}")
+
+    # 使用线程池并发执行选中的模型脚本
+    with ThreadPoolExecutor() as executor:
+        executor.map(run_model, model_indices)
 
 if __name__ == "__main__":
     main()
