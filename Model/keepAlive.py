@@ -82,7 +82,7 @@ def check_devices(devices, timeout):
             # Compare and log state changes
             db_reachable = bool(device['reachable'])
             if db_reachable != current_reachable:
-                warning_msg = f"[Alert][{datetime.datetime.now()}] Device '{device_name}' reachable changed! Database state: {db_reachable}, Current state: {current_reachable}"
+                warning_msg = f"[Alert][{datetime.datetime.now()}][KeepAlive] Device '{device_name}' reachable changed! Database state: {db_reachable}, Current state: {current_reachable}"
                 print(colored(warning_msg, 'red'))
                 state_changes.append({
                     'api_url': device['api_url'],
@@ -97,6 +97,8 @@ def check_devices(devices, timeout):
                     data = response.json()
                     # 获取 'reachable' 状态
                     current_reachable = data.get('state', {}).get('reachable')
+                    if current_reachable is None:
+                        current_reachable = data.get('config', {}).get('reachable')
                     # 获取设备名称
                     device_name = device['device_name']
 
@@ -104,7 +106,7 @@ def check_devices(devices, timeout):
                     db_reachable = bool(device['reachable'])
 
                     if db_reachable != current_reachable:
-                        warning_msg = f"[Alert][{datetime.datetime.now()}] Device '{device_name}' reachable changed! Database state: {db_reachable}, Current state: {current_reachable}"
+                        warning_msg = f"[Alert][{datetime.datetime.now()}][KeepAlive] Device '{device_name}' reachable changed! Database state: {db_reachable}, Current state: {current_reachable}"
                         print(colored(warning_msg, 'red'))
                         state_changes.append({
                             'api_url': device['api_url'],

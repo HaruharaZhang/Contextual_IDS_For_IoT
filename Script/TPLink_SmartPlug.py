@@ -122,7 +122,6 @@ def clear_table(db_config):
         cursor.execute("DELETE FROM device_info;")
         cursor.execute("DELETE FROM device_states;")
         connection.commit()  # 确保提交更改
-        print("database cleaned!")
     except pymysql.MySQLError as e:
         print(f"Error clearing table tp_link_devices: {e}")
     finally:

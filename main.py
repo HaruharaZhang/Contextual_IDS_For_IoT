@@ -110,8 +110,7 @@ def main():
 
             script_path = os.path.join(script_directory, scripts[script_index])
             print(f"Running {script_path}...")
-            subprocess.run([sys.executable, script_path], check=True)
-            print("Script executed successfully.")
+            subprocess.Popen([sys.executable, script_path])
         except ValueError:
             print("Please enter a valid number.")
             continue

@@ -5,6 +5,8 @@ import urllib3
 import os
 import sys
 import pymysql
+import configparser
+import multiprocessing
 from configparser import ConfigParser
 
 # 添加父目录到 sys.path 以便可以导入其他模块
@@ -70,7 +72,7 @@ def count_records(dbname):
             cursor.execute(f"SELECT COUNT(*) AS count FROM {safe_table_name}")
             result = cursor.fetchone()
             counts[table] = result['count']
-            print(f"Total {table}: {result['count']}")
+            #print(f"Total {table}: {result['count']}")
     except pymysql.MySQLError as e:
         print(f"Error counting records: {e}")
     finally:
@@ -240,7 +242,7 @@ def create_database_and_tables(dbname, messages):
     ''')
     conn.commit()
     conn.close()
-    print(messages['database_created'])
+    #print(messages['database_created'])
 
 
 # 插入用户名
@@ -353,7 +355,7 @@ def compare_and_update_config(dbname, ip, username, new_config, messages):
                     UPDATE config_details SET {} = %s WHERE username = %s
                 '''.format(f'`{key}`'), (value, username))
                 conn.commit()
-                print(f"{messages['config_updated']} {key}")
+                #print(f"{messages['config_updated']} {key}")
         #print(messages['config_check_complete'])
     else:
         store_config_details(dbname, username, new_config, messages)
@@ -442,7 +444,7 @@ def fetch_all_data(ip, username, dbname, messages):
 
 def get_data(device_ip, messages, dbname):
     """获取设备数据并创建用户"""
-    print(messages['start_get_data'])
+    #print(messages['start_get_data'])
     ip = device_ip
     if not ip:
         raise ValueError(messages['no_ip_found'])
@@ -455,7 +457,7 @@ def get_data(device_ip, messages, dbname):
     conn.close()
     if result:
         username = result['username']
-        print(messages['username_exists'])
+        #print(messages['username_exists'])
         config_data = get_config(ip, username)
         if config_data:
             compare_and_update_config(dbname, ip, username, config_data, messages)
@@ -526,10 +528,157 @@ def fetch_and_store_device_states(ip, dbname):
     finally:
         conn.close()
 
+def load_config():
+    config = configparser.ConfigParser()
+    config.read(['Config/Script/Philips_Hue_Bridge_2.0_(Linux_4.14).cfg'])
+    settings = config['Settings']
+    
+    return (settings['database_name'], float(settings['scan_interval']))
+
+def background_task(device_ip, dbname, scan_interval):
+    while True:
+        update_device_states(device_ip, dbname)
+        time.sleep(scan_interval)
+
+def update_device_states(ip, dbname):
+    # 连接数据库并查询所有用户名和设备ID
+    conn = connect_db(dbname)
+    cursor = conn.cursor()
+
+    try:
+        # 灯泡：
+        cursor.execute("SELECT username FROM users WHERE ip = %s LIMIT 1", (ip,))
+        user_result = cursor.fetchone()
+        if not user_result:
+            print("No username found for the given IP.")
+            return
+
+        username = user_result['username']
+
+        # 获取所有设备ID
+        cursor.execute("SELECT light_id FROM lights")
+        devices = cursor.fetchall()
+        if not devices:
+            print("No devices found.")
+            return
+
+        # 对每个设备抓取和存储状态
+        for device in devices:
+            device_id = device['light_id']
+            url = f"https://{ip}/api/{username}/lights/{device_id}"
+            response = requests.get(url, verify=False)  # 跳过SSL验证
+            if response.status_code == 200:
+                data = response.json()
+                state = json.dumps(data)  # 将JSON响应转换为字符串
+                reachable = data['state']['reachable']  # 获取reachable状态
+                device_name = data['name']
+                call_procedure(device_name, device_id, state, reachable, url)
+
+            else:
+                print(f"Failed to fetch state for device {device_id}: {response.status_code}")
+        
+        # Sensors
+        cursor.execute('''SELECT *
+            FROM sensors
+            WHERE JSON_CONTAINS_PATH(config, 'one', '$.reachable') = 1;
+            ''')
+        devices = cursor.fetchall()
+        if not devices:
+            print("No devices found.")
+            return
+
+        # 对每个设备抓取和存储状态
+        for device in devices:
+            device_id = device['sensor_id']
+            url = f"https://{ip}/api/{username}/sensors/{device_id}"
+            response = requests.get(url, verify=False)  # 跳过SSL验证
+            if response.status_code == 200:
+                data = response.json()
+                state = json.dumps(data)  # 将JSON响应转换为字符串
+                reachable = data['config']['reachable']  # 获取reachable状态
+                device_name = data['name']
+                call_procedure(device_name, device_id, state, reachable, url)
+
+            else:
+                print(f"Failed to fetch state for device {device_id}: {response.status_code}")
+
+
+    except pymysql.MySQLError as e:
+        print(f"Database error: {e}")
+    finally:
+        conn.close()
+
+def create_procedure(dbname):
+    try:
+        conn = connect_db(dbname)
+        cursor = conn.cursor()
+
+        # 首先删除已存在的存储过程
+        cursor.execute('DROP PROCEDURE IF EXISTS UpdateOrInsertDeviceState;')
+
+        # 定义存储过程
+        procedure = """
+        CREATE PROCEDURE UpdateOrInsertDeviceState(
+            IN p_device_name VARCHAR(255),
+            IN p_device_id VARCHAR(255),
+            IN p_state JSON,
+            IN p_reachable BOOLEAN,
+            IN p_api_url VARCHAR(255)
+        )
+        BEGIN
+            DECLARE v_id INT;
+
+            SELECT id INTO v_id FROM device_states
+            WHERE device_id = p_device_id AND api_url = p_api_url
+            LIMIT 1;
+
+            IF v_id IS NOT NULL THEN
+                UPDATE device_states SET 
+                    device_name = p_device_name,
+                    state = p_state, 
+                    reachable = p_reachable,
+                    last_updated = CURRENT_TIMESTAMP
+                WHERE id = v_id;
+            ELSE
+                INSERT INTO device_states (device_name, device_id, state, reachable, api_url)
+                VALUES (p_device_name, p_device_id, p_state, p_reachable, p_api_url);
+            END IF;
+        END;
+        """
+        
+        # 执行SQL语句
+        cursor.execute(procedure)
+        conn.commit()
+    except pymysql.MySQLError as e:
+        print("Error while connecting to MySQL", e)
+    finally:
+        cursor.close()
+        conn.close()
+
+def call_procedure(device_name, device_id, state, reachable, api_url):
+    dbname, scan_interval = load_config()
+    conn = connect_db(dbname)
+    cursor = conn.cursor()
+
+    try:
+        # 建立数据库连接
+        conn = connect_db(dbname)
+        cursor = conn.cursor()
+        # 调用存储过程
+        args = (device_name, device_id, state, reachable, api_url)
+        cursor.callproc('UpdateOrInsertDeviceState', args)
+        conn.commit()
+    except pymysql.MySQLError as e:
+        print("Error while connecting to MySQL", e)
+    finally:
+        # 关闭数据库连接
+        cursor.close()
+        conn.close()
 
 if __name__ == "__main__":
+    dbname, scan_interval = load_config()
     # 定义数据库名称
-    dbname = 'philips_hue_bridge_db'
+    #dbname = 'philips_hue_bridge_db'
     
     # 获取语言和消息
     lang = os.environ.get("LANGUAGE", "en")
@@ -540,8 +689,13 @@ if __name__ == "__main__":
 
     # 获取 DEVICE_IP 参数
     device_ip = os.getenv('DEVICE_IP')
-    print(messages['retrieved_device_ip'], device_ip)
+    #print(messages['retrieved_device_ip'], device_ip)
     get_data(device_ip, messages, dbname)
+    create_procedure(dbname)
 
     # 抓取并存储所有设备状态
     fetch_and_store_device_states(device_ip, dbname)
+
+    process = process = multiprocessing.Process(target=background_task, args=(device_ip, dbname, scan_interval))
+    # 启动线程
+    process.start()
