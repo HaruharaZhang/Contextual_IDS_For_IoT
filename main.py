@@ -1,3 +1,9 @@
+from check_dependencies import check_and_install_dependencies
+
+# 检查所有依赖是否都已安装
+result = check_and_install_dependencies()
+print(result)
+
 import os
 import sys
 import ctypes
@@ -43,6 +49,7 @@ def main():
     if not is_admin():
         print(messages['admin_required'])
         sys.exit()
+
 
     # 显示欢迎信息
     print(messages['welcome'])

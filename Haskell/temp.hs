@@ -1,3 +1,5 @@
+import System.Environment (getArgs)
+
 -- 定义设备和状态
 data Device = Bulb | Switch | Outlet deriving (Show, Eq)
 data BulbState = Off | Dim | Medium | Bright deriving (Show, Eq)
@@ -48,24 +50,53 @@ handleStateChange state device newState =
     Outlet -> updateBulbBasedOnOutlet state newState
     Bulb -> updateState state device newState
 
+instance Read Device where
+    readsPrec _ value = case value of
+        "Bulb"   -> [(Bulb, "")]
+        "Switch" -> [(Switch, "")]
+        "Outlet" -> [(Outlet, "")]
+        _        -> []
+
+instance Read DeviceState where
+    readsPrec _ value =
+        let bulbStates = [("Off", BulbState Off), ("Dim", BulbState Dim), ("Medium", BulbState Medium), ("Bright", BulbState Bright)]
+            switchStates = [("SwitchOff", SwitchState SwitchOff), ("SwitchOn", SwitchState SwitchOn)]
+            outletStates = [("Powered", OutletState Powered), ("Unpowered", OutletState Unpowered)]
+            tryRead s lst = [(state, rest) | (str, state) <- lst, (s, rest) <- lex value, s == str]
+        in tryRead value bulbStates ++ tryRead value switchStates ++ tryRead value outletStates
+
+
 main :: IO ()
 main = do
   let initialState = [(Bulb, BulbState Off), (Switch, SwitchState SwitchOff), (Outlet, OutletState Unpowered)]
+  
   putStrLn "Initial State:"
   print initialState
 
-  let stateAfterPower = handleStateChange initialState Outlet (OutletState Powered)
-  putStrLn "After Powering Outlet:"
-  print stateAfterPower
+  args <- getArgs
+  let (deviceStr, stateStr) = (args !! 0, args !! 1)
+      device = read deviceStr :: Device
+      newState = read stateStr :: DeviceState
+      newStateAfterChange = handleStateChange initialState device newState
 
-  let stateAfterSwitchOn = handleStateChange stateAfterPower Switch (SwitchState SwitchOn)
-  putStrLn "After Turning Switch On:"
-  print stateAfterSwitchOn
+  putStrLn "State after change:"
+  print newStateAfterChange
 
-  let stateAfterPowerOff = handleStateChange stateAfterSwitchOn Outlet (OutletState Unpowered)
-  putStrLn "After Unpowering Outlet:"
-  print stateAfterPowerOff
+  -- putStrLn "Initial State:"
+  -- print initialState
 
-  let stateAnotherPower = handleStateChange stateAfterPowerOff Outlet (OutletState Powered)
-  putStrLn "After Powering Outlet:"
-  print stateAnotherPower
+  -- let stateAfterPower = handleStateChange initialState Outlet (OutletState Powered)
+  -- putStrLn "After Powering Outlet:"
+  -- print stateAfterPower
+
+  -- let stateAfterSwitchOn = handleStateChange stateAfterPower Switch (SwitchState SwitchOn)
+  -- putStrLn "After Turning Switch On:"
+  -- print stateAfterSwitchOn
+
+  -- let stateAfterPowerOff = handleStateChange stateAfterSwitchOn Outlet (OutletState Unpowered)
+  -- putStrLn "After Unpowering Outlet:"
+  -- print stateAfterPowerOff
+
+  -- let stateAnotherPower = handleStateChange stateAfterPowerOff Outlet (OutletState Powered)
+  -- putStrLn "After Powering Outlet:"
+  -- print stateAnotherPower
