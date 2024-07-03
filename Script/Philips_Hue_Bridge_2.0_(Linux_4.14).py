@@ -18,21 +18,36 @@ from messageLoader import get_messages
 # 忽略不安全请求警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# 从配置文件读取数据库信息
 def get_db_config():
-    # 从Script目录上移一级到Project目录，然后进入Config目录
+    # 定义配置文件路径
     config_path = os.path.join(os.path.dirname(__file__), '..', 'Config', 'database.cfg')
-    config = ConfigParser()
-    config.read(config_path)
+    print("Attempting to load configuration from:", config_path)  # 显示尝试加载的配置文件路径
 
-    # config = ConfigParser()
-    # config.read(os.path.join('config', 'database.cfg'))
-    db_config = {
-        'host': config['Database']['host'],
-        'port': int(config['Database']['port']),
-        'user': config['Database']['user'],
-        'password': config['Database']['password']
-    }
+    # 创建配置解析器并读取配置文件
+    config = ConfigParser()
+    read_files = config.read(config_path, encoding='utf-8')  # 显式指定编码
+    if not read_files:
+        print("Failed to read any configuration files, please check the path and encoding.")
+        return None
+
+    print("Loaded sections:", config.sections())  # 显示已加载的配置段落
+
+    # 尝试获取数据库配置
+    try:
+        db_config = {
+            'host': config['Database']['host'],
+            'port': int(config['Database']['port']),
+            'user': config['Database']['user'],
+            'password': config['Database']['password']
+        }
+        print("Database configuration successfully loaded:", db_config)  # 显示数据库配置
+    except KeyError as e:
+        print("Key error:", e, "Check your configuration file sections and keys.")
+        return None
+    except Exception as e:
+        print("An error occurred while parsing the database configuration:", str(e))
+        return None
+
     return db_config
 
 # 清空指定数据库中的表格，但不删除表格本身。
