@@ -21,7 +21,6 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 def get_db_config():
     # 定义配置文件路径
     config_path = os.path.join(os.path.dirname(__file__), '..', 'Config', 'database.cfg')
-    print("Attempting to load configuration from:", config_path)  # 显示尝试加载的配置文件路径
 
     # 创建配置解析器并读取配置文件
     config = ConfigParser()
@@ -29,8 +28,6 @@ def get_db_config():
     if not read_files:
         print("Failed to read any configuration files, please check the path and encoding.")
         return None
-
-    print("Loaded sections:", config.sections())  # 显示已加载的配置段落
 
     # 尝试获取数据库配置
     try:
@@ -40,7 +37,6 @@ def get_db_config():
             'user': config['Database']['user'],
             'password': config['Database']['password']
         }
-        print("Database configuration successfully loaded:", db_config)  # 显示数据库配置
     except KeyError as e:
         print("Key error:", e, "Check your configuration file sections and keys.")
         return None
