@@ -16,17 +16,51 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 def load_config():
     config = configparser.ConfigParser()
-    config.read('Config/Model/keepAlive.cfg')
-    philips_hue_bridge_db = float(config['Settings']['philips_hue_bridge_db'])
-    timeout = float(config['Settings']['timeout'])
     
-    config.read('Config/database.cfg')
-    db_user = config['Database']['user']
-    db_password = config['Database']['password']
-    db_host = config['Database']['host']
-    exclude_databases = [db.strip() for db in config['Database']['exclude_databases'].split(',')]
+    # 读取 keepAlive.cfg 配置文件
+    keep_alive_path = os.path.join(os.path.dirname(__file__), '..', 'Config', 'Model', 'keepAlive.cfg')
+    read_files = config.read(keep_alive_path, encoding='utf-8')  # 显式指定编码
+    if not read_files:
+        print("Failed to read keepAlive configuration file, please check the path and encoding.")
+        return None
     
-    return philips_hue_bridge_db, timeout, db_user, db_password, db_host, exclude_databases
+    try:
+        philips_hue_bridge_db = float(config['Settings']['philips_hue_bridge_db'])
+        timeout = float(config['Settings']['timeout'])
+    except KeyError as e:
+        print("Key error:", e, "Check your keepAlive configuration file sections and keys.")
+        return None
+    except Exception as e:
+        print("An error occurred while parsing the keepAlive configuration:", str(e))
+        return None
+    
+    # 读取 database.cfg 配置文件
+    database_path = os.path.join(os.path.dirname(__file__), '..', 'Config', 'database.cfg')
+    read_files = config.read(database_path, encoding='utf-8')  # 显式指定编码
+    if not read_files:
+        print("Failed to read database configuration file, please check the path and encoding.")
+        return None
+    
+    try:
+        db_user = config['Database']['user']
+        db_password = config['Database']['password']
+        db_host = config['Database']['host']
+        exclude_databases = [db.strip() for db in config['Database']['exclude_databases'].split(',')]
+    except KeyError as e:
+        print("Key error:", e, "Check your database configuration file sections and keys.")
+        return None
+    except Exception as e:
+        print("An error occurred while parsing the database configuration:", str(e))
+        return None
+
+    return {
+        'philips_hue_bridge_db': philips_hue_bridge_db,
+        'timeout': timeout,
+        'db_user': db_user,
+        'db_password': db_password,
+        'db_host': db_host,
+        'exclude_databases': exclude_databases
+    }
 
 def get_databases(conn, exclude_databases):
     with conn.cursor() as cursor:
