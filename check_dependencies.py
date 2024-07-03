@@ -1,7 +1,6 @@
 import sys
 import pkg_resources
-import subprocess 
-
+import subprocess
 
 def check_and_install_dependencies(config_path='Config/requirement.cfg'):
     dependencies = []
@@ -22,11 +21,18 @@ def check_and_install_dependencies(config_path='Config/requirement.cfg'):
     # 尝试安装未安装的依赖库
     for package in not_installed:
         try:
-            print(f"Attempting to install {package}...")
+            print(f"Attempting to install {package} using pip...")
             subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
             print(f"{package} has been successfully installed.")
-        except subprocess.CalledProcessError:
-            print(f"Failed to install {package}.")
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to install {package} with pip, error: {e}")
+            # 如果出现pip未找到的错误，尝试使用pip3
+            try:
+                print(f"Attempting to install {package} using pip3...")
+                subprocess.check_call([sys.executable, '-m', 'pip3', 'install', package])
+                print(f"{package} has been successfully installed with pip3.")
+            except subprocess.CalledProcessError:
+                print(f"Failed to install {package} with pip3.")
 
     # 再次检查是否安装成功
     still_missing = []
