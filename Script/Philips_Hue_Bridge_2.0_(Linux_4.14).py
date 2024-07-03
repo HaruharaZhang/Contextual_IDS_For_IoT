@@ -20,8 +20,13 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # 从配置文件读取数据库信息
 def get_db_config():
+    # 从Script目录上移一级到Project目录，然后进入Config目录
+    config_path = os.path.join(os.path.dirname(__file__), '..', 'Config', 'database.cfg')
     config = ConfigParser()
-    config.read(os.path.join('config', 'database.cfg'))
+    config.read(config_path)
+
+    # config = ConfigParser()
+    # config.read(os.path.join('config', 'database.cfg'))
     db_config = {
         'host': config['Database']['host'],
         'port': int(config['Database']['port']),
