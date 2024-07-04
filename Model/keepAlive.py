@@ -15,11 +15,13 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 # philips_hue_bridge_db -> philips_hue_bridge 的每秒扫描间隔
 
 def load_config():
-    config = configparser.ConfigParser()
+    
     
     # 读取 keepAlive.cfg 配置文件
     keep_alive_path = os.path.join(os.path.dirname(__file__), '..', 'Config', 'Model', 'keepAlive.cfg')
+    config = configparser.ConfigParser()
     read_files = config.read(keep_alive_path, encoding='utf-8')  # 显式指定编码
+
     if not read_files:
         print("Failed to read keepAlive configuration file, please check the path and encoding.")
         return None
@@ -53,6 +55,9 @@ def load_config():
         print("An error occurred while parsing the database configuration:", str(e))
         return None
 
+    print(f"Database Host: {db_host}")
+    print(f"Database User: {db_user}")
+    print(f"Excluded Databases: {exclude_databases}")
     return {
         'philips_hue_bridge_db': philips_hue_bridge_db,
         'timeout': timeout,
@@ -66,6 +71,7 @@ def get_databases(conn, exclude_databases):
     with conn.cursor() as cursor:
         cursor.execute("SHOW DATABASES;")
         databases = [db[0] for db in cursor.fetchall() if db[0].strip() not in exclude_databases]
+    print(f"Available databases: {databases}")
     return databases
 
 def fetch_device_states(conn, db_name):
