@@ -55,9 +55,9 @@ def load_config():
         print("An error occurred while parsing the database configuration:", str(e))
         return None
 
-    print(f"Database Host: {db_host}")
-    print(f"Database User: {db_user}")
-    print(f"Excluded Databases: {exclude_databases}")
+    #print(f"Database Host: {db_host}")
+    #print(f"Database User: {db_user}")
+    #print(f"Excluded Databases: {exclude_databases}")
     return {
         'philips_hue_bridge_db': philips_hue_bridge_db,
         'timeout': timeout,
@@ -71,7 +71,7 @@ def get_databases(conn, exclude_databases):
     with conn.cursor() as cursor:
         cursor.execute("SHOW DATABASES;")
         databases = [db[0] for db in cursor.fetchall() if db[0].strip() not in exclude_databases]
-    print(f"Available databases: {databases}")
+    #print(f"Available databases: {databases}")
     return databases
 
 def fetch_device_states(conn, db_name):
@@ -165,6 +165,7 @@ def check_devices(devices, timeout):
 
 def main():
     scan_interval, timeout, db_user, db_password, db_host, exclude_databases = load_config()
+    print({db_user},{db_password},{db_host})
     conn = pymysql.connect(user=db_user, password=db_password, host=db_host)
 
     try:
