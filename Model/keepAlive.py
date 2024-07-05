@@ -55,9 +55,6 @@ def load_config():
         print("An error occurred while parsing the database configuration:", str(e))
         return None
 
-    #print(f"Database Host: {db_host}")
-    #print(f"Database User: {db_user}")
-    #print(f"Excluded Databases: {exclude_databases}")
     return {
         'philips_hue_bridge_db': philips_hue_bridge_db,
         'timeout': timeout,
@@ -159,13 +156,18 @@ def check_devices(devices, timeout):
                     print(colored(f"Error accessing {device['api_url']}: {e}", 'yellow'))
                 except ValueError as e:
                     print(colored(f"Error parsing JSON from {device['api_url']}: {e}", 'yellow'))
-
-
     return state_changes
 
 def main():
-    scan_interval, timeout, db_user, db_password, db_host, exclude_databases = load_config()
-    print({db_user},{db_password},{db_host})
+    #scan_interval, timeout, db_user, db_password, db_host, exclude_databases = load_config()
+    config = load_config()  # 将配置加载为一个字典
+    scan_interval = config['philips_hue_bridge_db']
+    timeout = config['timeout']  # 根据实际键来访问
+    db_user = config['db_user']
+    db_password = config['db_password']
+    db_host = config['db_host']
+    exclude_databases = config['exclude_databases']
+
     conn = pymysql.connect(user=db_user, password=db_password, host=db_host)
 
     try:
