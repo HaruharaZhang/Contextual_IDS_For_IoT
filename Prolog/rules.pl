@@ -1,10 +1,13 @@
 % 定义合法状态的规则
 
 % Rule 灯泡打开的时候，没有按下开关，插座打开，电压高，传感器高传感
-valid_state(bulb_on, switch_unpressed, socket_on, high_voltage, sensor_high).
+valid_state(bulb_on, switch_unpressed, socket_on, _, sensor_high).
 
-% Rule 灯泡关闭的时候，没有按下开关，插座关闭，电压低，传感器低传感
-valid_state(bulb_off, switch_unpressed, socket_off, low_voltage, sensor_low).
+% Rule 灯泡关闭的时候，没有按下开关，插座开启，电压低，传感器低传感
+valid_state(bulb_off, switch_unpressed, socket_on, _, sensor_low).
+
+% Rule 灯泡关闭的时候，没有按下开关，插座关闭，电压高，传感器高传感
+valid_state(bulb_off, switch_unpressed, socket_off, _, sensor_low).
 
 % Rules 开关被按下的时候，用户在干涉设备，不考虑其他因素
 valid_state(_, switch_pressed, _, _, _).

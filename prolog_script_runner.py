@@ -3,7 +3,7 @@ import argparse
 import os
 
 def check_prolog_script(program_name):
-    pl_file = f"Prolog/{program_name}.pl"
+    pl_file = os.path.join(os.path.dirname(__file__), '..', 'Prolog', f'{program_name}.pl')
     # 确保源文件存在
     if not os.path.exists(pl_file):
         print(f"Error: Prolog source file '{pl_file}' not found.")
@@ -11,7 +11,7 @@ def check_prolog_script(program_name):
     return True
 
 def call_prolog(program_name, bulb, switch, socket, voltage, sensor):
-    pl_file = f"Prolog/{program_name}.pl"
+    pl_file = os.path.join(os.path.dirname(__file__), 'Prolog', f'{program_name}.pl')
     if not os.path.exists(pl_file):
         print(f"Prolog script '{pl_file}' not found.")
         return "Prolog script not found, cannot execute."
@@ -32,7 +32,7 @@ def main():
     args = parser.parse_args()
 
     # Example usage with command line arguments
-    print(f"Calling Prolog script '{args.name}' with state: Bulb='{args.bulb}', Switch='{args.switch}', Socket='{args.socket}', Voltage='{args.voltage}', Sensor='{args.sensor}'")
+    #print(f"Calling Prolog script '{args.name}' with state: Bulb='{args.bulb}', Switch='{args.switch}', Socket='{args.socket}', Voltage='{args.voltage}', Sensor='{args.sensor}'")
     output = call_prolog(args.name, args.bulb, args.switch, args.socket, args.voltage, args.sensor)
     print(output)
 

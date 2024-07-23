@@ -45,7 +45,7 @@ def main():
             line = ser.readline().decode('utf-8').strip()
             if "Temperature is:" in line and args.temperature:
                 temperature = float(line.split(":")[1].strip().split(" ")[0])
-                print(f"Temperature: {temperature} Celsius")
+                print(f"Temperature: {temperature}")
                 break
             elif "Sensor Value:" in line and args.light:
                 light_value = int(line.split(":")[1].strip())

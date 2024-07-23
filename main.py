@@ -148,7 +148,7 @@ def main():
 
             model_path = os.path.join(model_directory, models[model_index])
             print(f"Running {model_path}...")
-            subprocess.run([sys.executable, model_path], check=True)
+            subprocess.run([sys.executable, model_path])
             print(f"Model script {model_path} executed successfully.")
         except ValueError:
             print(f"Invalid input: {model_index + 1}. Please enter a number.")
