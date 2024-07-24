@@ -113,7 +113,8 @@ def fetch_device_states(db_name):
 def check_devices(devices):
     lamps = []
     switches = []
-    sockets = []   
+    sockets = []
+    voltage = 'low_voltage'
     for device in devices:
         state_info = json.loads(device['state'])
         if 'state' in state_info and isinstance(state_info['state'], dict):
@@ -130,6 +131,10 @@ def check_devices(devices):
             socket_on = any(child['state'] == 1 for child in state_info['children'])
             sockets.append(socket_on)
 
+        if 'current_ma' in state_info:
+            voltage = 'high_voltage' if state_info['current_ma'] > 10 else 'low_voltage'
+
+
     # 设置当前时间为UTC时间，假设数据库时间也是UTC
     current_time = datetime.utcnow().replace(tzinfo=pytz.utc)
 
@@ -144,20 +149,22 @@ def check_devices(devices):
     sensor_data = get_sensor_values()
     light_level = sensor_data.get('light', '0')
     temperature = sensor_data.get('temperature', '0')
-    print(colored(f"Bulb: {bulb_state}, Switch: {switch_state}, Socket: {socket_state}, Light: {light_level}, Temperature: {temperature}", 'green'))
+    print(colored(f"Bulb: {bulb_state}, Switch: {switch_state}, Socket: {socket_state}, Voltage: {voltage}, Light: {light_level}, Temperature: {temperature}", 'green'))
     light_level = 'sensor_high' if int(light_level) > 600 else 'sensor_low'
 
     # 调用 Prolog 脚本
-    output = call_prolog_script('rules', bulb_state, switch_state, socket_state, "high_voltage", light_level)
+    output = call_prolog_script('rules', bulb_state, switch_state, socket_state, voltage, light_level)
+    # <class 'str'> 转变为布尔变量
+    output = True if output.strip() == 'True' else False
     check_and_alert(output)
-    print(output)
+    #print(output)
 
 def check_and_alert(current_output):
     global last_state
     # 将当前的输出与上次的输出进行比较
-    if last_state == False and current_output == False:
+    if last_state is False and current_output is False:
         # 连续两次输出为False，触发警报
-        warning_msg = f"[Alert][{datetime.datetime.now()}][LightControl] Device reachable changed! Database state: False, Current state: False"
+        warning_msg = f"[Alert][{datetime.now()}][LightControl] Device states are not normal!"
         print(colored(warning_msg, 'red'))
     # 更新上次的状态为当前状态
     last_state = current_output

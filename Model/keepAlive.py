@@ -85,14 +85,16 @@ def check_devices(devices, timeout):
             # Assume the script and parameters are correctly formatted in api_url
             parts = device['api_url'].split()
             script_name = parts[0] 
-            mode = parts[1].strip('-')
-
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  
             script_path = os.path.join(base_dir, script_name) 
-            device_ip = parts[2]
+            if len(parts) > 2:
+                device_ip = parts[2]  # 安全访问第三个元素
+                mode = parts[1].strip('-')
+                command = ['/usr/bin/python3', script_path, mode, '--ip', device_ip, '--timeout', str(timeout)]
+            else:
+                device_ip = parts[1]  
+                command = ['/usr/bin/python3', script_path, '--ip', device_ip, '--timeout', str(timeout)]
             device_name = device['device_name']
-
-            command = ['/usr/bin/python3', script_path, mode, '--ip', device_ip, '--timeout', str(timeout)]
 
             try:
                 # Execute the script with the appropriate parameters
