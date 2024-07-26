@@ -4,11 +4,18 @@ import datetime
 import os
 import requests
 import pymysql
-import subprocess
-import json
+import subprocess # 引入subprocess处理命令行调用
+import json # 引入json处理设备状态
 import pytz  # 引入pytz处理时区
 from termcolor import colored
 from datetime import datetime, timedelta
+import subprocess
+
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
+# 全局变量，用于跟踪上一次的检查结果
+last_state = None
 
 def load_config():
     # 读取 createRules.cfg 配置文件
@@ -93,9 +100,9 @@ def add_sensor_values(sensor_light_threshold, sensor_temperature_threshold):
         if light_output.stdout:
             light_value = int(light_output.stdout.strip().split(': ')[1])
             if light_value > sensor_light_threshold:
-                light_value = "light_sensor_high" + ", "
+                light_value = "light_sensor_high," + ", "
             else:
-                light_value = "light_sensor_normal" + ", "
+                light_value = "light_sensor_normal," + ", "
             resuit.append(light_value)
     except subprocess.TimeoutExpired:
         print("Timeout while reading light sensor")
@@ -118,7 +125,8 @@ def add_sensor_values(sensor_light_threshold, sensor_temperature_threshold):
 
     return resuit
 
-def create_rule(devices, button_press_interval, socket_voltage_threshold, socket_voltage_min, socket_voltage_max):
+
+def check_device(devices, button_press_interval, socket_voltage_threshold, socket_voltage_min, socket_voltage_max):
     prolog_rules = []
     # 解析设备数据，并构建规则
     for device in devices:
@@ -240,21 +248,17 @@ def create_rule(devices, button_press_interval, socket_voltage_threshold, socket
         except Exception as e:
             pass
     return prolog_rules
-        
-def add_prolog_rules(rule):
-    prolog_rule = "valid_state("
-    for i in range(len(rule)):
-        if i == 0:
-            prolog_rule += "'" + str(rule[i]) + "'"
-        if i == len(rule) - 1:
-            prolog_rule += "'" + str(rule[i]) + "'" + ")."
-        else:
-            prolog_rule += ", " + "'" + str(rule[i]) + "'"
 
-    # 将规则写入到Prolog文件
-    with open(os.path.join(os.path.dirname(__file__), '..', 'Prolog', 'auto_rules.pl'), 'a') as f:
-        f.write(prolog_rule + '\n')
-    print(colored("Rule added to Prolog file", "green"))
+def check_and_alert(current_output):
+    global last_state
+    # 将当前的输出与上次的输出进行比较
+    if last_state is False and current_output is False:
+        # 连续两次输出为False，触发警报
+        warning_msg = f"[Alert][{datetime.now()}][LightControl] Device states are not normal!"
+        print(colored(warning_msg, 'red'))
+    # 更新上次的状态为当前状态
+    last_state = current_output
+
 
 def main():
     config = load_config()  # 将配置加载为一个字典
@@ -270,47 +274,41 @@ def main():
     db_password = config['db_password']
     db_host = config['db_host']
     exclude_databases = config['exclude_databases']
-
-    # 初始化变量
-    rule_count = {}
-    prolog_rules_all = []
-    new_rule = []
-    rules_list = []
-    prolog_rules_all_count = []
-    prolog_rules_all_isAdd = []
     
     conn = pymysql.connect(user=db_user, password=db_password, host=db_host)
     databases = get_databases(conn, exclude_databases)
     try:
         while True:
-            new_rule = [] # 清空数组内容
+            rule = [] # 清空数组内容
             for db_name in databases:
                 devices = fetch_device_states(conn, db_name)
-                new_rule.extend(create_rule(devices, button_press_interval, socket_voltage_threshold, socket_voltage_min, socket_voltage_max))
-            new_rule.extend(add_sensor_values(sensor_light_threshold, sensor_temperature_threshold))
 
-            if(new_rule in prolog_rules_all):
-                index = prolog_rules_all.index(new_rule)
-                if(prolog_rules_all_count[index] > default_rule_threshold):
-                    if(prolog_rules_all_isAdd[index] == False):
-                        prolog_rules_all_isAdd[index] = True
-                        add_prolog_rules(new_rule)
-                        print(colored("Add new rule: " + str(new_rule), "green"))
-                else:  
-                    prolog_rules_all_count[index] += 1
+                rule.extend(check_device(devices, button_press_interval, socket_voltage_threshold, socket_voltage_min, socket_voltage_max))
+            rule.extend(add_sensor_values(sensor_light_threshold, sensor_temperature_threshold))
+            # 确保所有参数都转换为字符串
+            rule = [str(item) for item in rule]
+            prolog_rule = "is_valid_state("
+            for i in range(len(rule)):
+                if i == 0:
+                    prolog_rule += "'" + str(rule[i]) + "'"
+                if i == len(rule) - 1:
+                    prolog_rule += "'" + str(rule[i]) + "'" + ")."
+                else:
+                    prolog_rule += ", " + "'" + str(rule[i]) + "'"
+            pl_file = os.path.join(os.path.dirname(__file__), '..', 'Prolog', 'auto_rules.pl')
+            prolog_command = ["swipl", "-s", pl_file, "-g", f"{prolog_rule},halt.", "-t", "halt"]
+            result = subprocess.run(prolog_command, capture_output=True, text=True)
+            if result.stdout.strip() == "False":
+                check_and_alert(False)
 
-            else:
-                prolog_rules_all.append(new_rule)
-                prolog_rules_all_count.append(1)
-                prolog_rules_all_isAdd.append(False)
+            print("*" * 50)
 
-
-            # 清空rules
-            rule_count = {}
             time.sleep(database_scan_interval)
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
     finally:
         conn.close()
 
-
 if __name__ == "__main__":
     main()
+
