@@ -93,9 +93,9 @@ def add_sensor_values(sensor_light_threshold, sensor_temperature_threshold):
         if light_output.stdout:
             light_value = int(light_output.stdout.strip().split(': ')[1])
             if light_value > sensor_light_threshold:
-                light_value = "light_sensor_high" + ", "
+                light_value = "light_sensor_high"
             else:
-                light_value = "light_sensor_normal" + ", "
+                light_value = "light_sensor_normal"
             resuit.append(light_value)
     except subprocess.TimeoutExpired:
         print("Timeout while reading light sensor")
@@ -141,10 +141,10 @@ def create_rule(devices, button_press_interval, socket_voltage_threshold, socket
             if device_state['productname'] == "Hue Smart button":
                 prolog_rules.append(device_state['state']['buttonevent'])
                 #prolog_rules.append(device_state['state']['lastupdated'])
-                # 检查开关是否在最近x秒内被按下
-
+                
                 # 设置当前时间为UTC时间，数据库时间也是UTC
                 current_time = datetime.utcnow().replace(tzinfo=pytz.utc)
+                # 检查开关是否在最近x秒内被按下
                 if current_time - datetime.strptime(device_state['state']['lastupdated'], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.utc) <= timedelta(seconds=button_press_interval):
                     prolog_rules.append('switch_pressed')
                 else:
@@ -216,7 +216,7 @@ def create_rule(devices, button_press_interval, socket_voltage_threshold, socket
                     prolog_rules.append(True)
                 else:
                     prolog_rules.append(False)
-                prolog_rules.append(device_state['led_off'])
+                prolog_rules.append(device_state['relay_state'])
                 if(device_state['voltage_mv'] > socket_voltage_min and device_state['voltage_mv'] < socket_voltage_max):
                     prolog_rules.append(True)
                 else:
@@ -228,7 +228,6 @@ def create_rule(devices, button_press_interval, socket_voltage_threshold, socket
         try:
             if device_state['alias'] == "TP-LINK_Power Strip_3A1B" and device_state['model'] == "KP303(UK)" and device_state['mic_type'] == "IOT.SMARTPLUGSWITCH":
                 prolog_rules.append(device_state['deviceId'])
-                prolog_rules.append(device_state['led_off'])
 
                 prolog_rules.append(device_state['children'][0]['id'])
                 prolog_rules.append(device_state['children'][0]['state'])
@@ -242,15 +241,14 @@ def create_rule(devices, button_press_interval, socket_voltage_threshold, socket
     return prolog_rules
         
 def add_prolog_rules(rule):
-    prolog_rule = "valid_state("
+    prolog_rule = "valid_state(["
     for i in range(len(rule)):
         if i == 0:
             prolog_rule += "'" + str(rule[i]) + "'"
-        if i == len(rule) - 1:
-            prolog_rule += "'" + str(rule[i]) + "'" + ")."
+        elif i == len(rule) - 1:
+            prolog_rule += ", " + "'" + str(rule[i]) + "'" + "])."
         else:
             prolog_rule += ", " + "'" + str(rule[i]) + "'"
-
     # 将规则写入到Prolog文件
     with open(os.path.join(os.path.dirname(__file__), '..', 'Prolog', 'auto_rules.pl'), 'a') as f:
         f.write(prolog_rule + '\n')
@@ -279,15 +277,19 @@ def main():
     prolog_rules_all_count = []
     prolog_rules_all_isAdd = []
     
-    conn = pymysql.connect(user=db_user, password=db_password, host=db_host)
-    databases = get_databases(conn, exclude_databases)
+    
     try:
         while True:
+            conn = pymysql.connect(user=db_user, password=db_password, host=db_host)
+            databases = get_databases(conn, exclude_databases)
             new_rule = [] # 清空数组内容
             for db_name in databases:
                 devices = fetch_device_states(conn, db_name)
                 new_rule.extend(create_rule(devices, button_press_interval, socket_voltage_threshold, socket_voltage_min, socket_voltage_max))
-            new_rule.extend(add_sensor_values(sensor_light_threshold, sensor_temperature_threshold))
+            #new_rule.extend(add_sensor_values(sensor_light_threshold, sensor_temperature_threshold))
+            light_and_temperature = add_sensor_values(sensor_light_threshold, sensor_temperature_threshold)
+            new_rule.append(light_and_temperature[0])
+            new_rule.append(light_and_temperature[1])
 
             if(new_rule in prolog_rules_all):
                 index = prolog_rules_all.index(new_rule)
@@ -308,6 +310,7 @@ def main():
             # 清空rules
             rule_count = {}
             time.sleep(database_scan_interval)
+            conn.close()
     finally:
         conn.close()
 

@@ -15,7 +15,7 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 # 全局变量，用于跟踪上一次的检查结果
-last_state = None
+last_state = True
 
 def load_config():
     # 读取 createRules.cfg 配置文件
@@ -84,6 +84,7 @@ def get_databases(conn, exclude_databases):
     return databases
 
 def fetch_device_states(conn, db_name):
+    devices = []
     conn.select_db(db_name)
     with conn.cursor(pymysql.cursors.DictCursor) as cursor:
         cursor.execute("SELECT device_name, state FROM device_states;")
@@ -100,9 +101,9 @@ def add_sensor_values(sensor_light_threshold, sensor_temperature_threshold):
         if light_output.stdout:
             light_value = int(light_output.stdout.strip().split(': ')[1])
             if light_value > sensor_light_threshold:
-                light_value = "light_sensor_high," + ", "
+                light_value = "light_sensor_high"
             else:
-                light_value = "light_sensor_normal," + ", "
+                light_value = "light_sensor_normal"
             resuit.append(light_value)
     except subprocess.TimeoutExpired:
         print("Timeout while reading light sensor")
@@ -122,7 +123,6 @@ def add_sensor_values(sensor_light_threshold, sensor_temperature_threshold):
         print("Timeout while reading temperature sensor")
     except Exception as e:
         print(f"Failed to read temperature sensor: {str(e)}")
-
     return resuit
 
 
@@ -224,19 +224,17 @@ def check_device(devices, button_press_interval, socket_voltage_threshold, socke
                     prolog_rules.append(True)
                 else:
                     prolog_rules.append(False)
-                prolog_rules.append(device_state['led_off'])
+                prolog_rules.append(device_state['relay_state'])
                 if(device_state['voltage_mv'] > socket_voltage_min and device_state['voltage_mv'] < socket_voltage_max):
                     prolog_rules.append(True)
                 else:
                     prolog_rules.append(False)
         except Exception as e:
             pass
-
         # For TP-LINK_Power Strip_3A1B
         try:
             if device_state['alias'] == "TP-LINK_Power Strip_3A1B" and device_state['model'] == "KP303(UK)" and device_state['mic_type'] == "IOT.SMARTPLUGSWITCH":
                 prolog_rules.append(device_state['deviceId'])
-                prolog_rules.append(device_state['led_off'])
 
                 prolog_rules.append(device_state['children'][0]['id'])
                 prolog_rules.append(device_state['children'][0]['state'])
@@ -244,21 +242,38 @@ def check_device(devices, button_press_interval, socket_voltage_threshold, socke
                 prolog_rules.append(device_state['children'][1]['state'])
                 prolog_rules.append(device_state['children'][2]['id'])
                 prolog_rules.append(device_state['children'][2]['state'])
-
         except Exception as e:
             pass
     return prolog_rules
+
 
 def check_and_alert(current_output):
     global last_state
     # 将当前的输出与上次的输出进行比较
     if last_state is False and current_output is False:
         # 连续两次输出为False，触发警报
-        warning_msg = f"[Alert][{datetime.now()}][LightControl] Device states are not normal!"
+        warning_msg = f"[Alert][{datetime.now()}][CreateRules-Control] Device states are not normal!"
         print(colored(warning_msg, 'red'))
+        send_alert('ALERT')
     # 更新上次的状态为当前状态
     last_state = current_output
 
+# 给Connector中的Elegoo_Mega2560.py添加一个新的命令行参数，用于发送警报
+def send_alert(alert_type):
+    global last_state
+    if alert_type not in ['NORMAL', 'WARNING', 'ALERT']:
+        print(f"Invalid alert type: {alert_type}")
+        return
+    else:
+        if last_state != alert_type:
+            alert_command = ['python', os.path.join(os.path.dirname(__file__), '..', 'Connector', 'Elegoo_Mega2560.py'), '--alert', alert_type]
+            last_state = alert_type
+    try:
+        subprocess.run(alert_command, capture_output=True, text=True, timeout=5)
+    except subprocess.TimeoutExpired:
+        print("Timeout while sending alert")
+    except Exception as e:
+        print(f"Failed to read light sensor: {str(e)}")
 
 def main():
     config = load_config()  # 将配置加载为一个字典
@@ -275,33 +290,53 @@ def main():
     db_host = config['db_host']
     exclude_databases = config['exclude_databases']
     
-    conn = pymysql.connect(user=db_user, password=db_password, host=db_host)
-    databases = get_databases(conn, exclude_databases)
     try:
         while True:
+            conn = pymysql.connect(user=db_user, password=db_password, host=db_host)
+            databases = get_databases(conn, exclude_databases)
             rule = [] # 清空数组内容
+            devices = [] # 清空数组内容
             for db_name in databases:
                 devices = fetch_device_states(conn, db_name)
-
                 rule.extend(check_device(devices, button_press_interval, socket_voltage_threshold, socket_voltage_min, socket_voltage_max))
-            rule.extend(add_sensor_values(sensor_light_threshold, sensor_temperature_threshold))
+            #rule.extend(add_sensor_values(sensor_light_threshold, sensor_temperature_threshold))
+            light_and_temperature = add_sensor_values(sensor_light_threshold, sensor_temperature_threshold)
+            rule.append(light_and_temperature[0])
+            rule.append(light_and_temperature[1])
             # 确保所有参数都转换为字符串
             rule = [str(item) for item in rule]
-            prolog_rule = "is_valid_state("
+            prolog_rule = "is_valid_state(["
             for i in range(len(rule)):
                 if i == 0:
                     prolog_rule += "'" + str(rule[i]) + "'"
-                if i == len(rule) - 1:
-                    prolog_rule += "'" + str(rule[i]) + "'" + ")."
+                elif i == len(rule) - 1:
+                    prolog_rule += ", " + "'" + str(rule[i]) + "'" + "])"
                 else:
                     prolog_rule += ", " + "'" + str(rule[i]) + "'"
-            pl_file = os.path.join(os.path.dirname(__file__), '..', 'Prolog', 'auto_rules.pl')
-            prolog_command = ["swipl", "-s", pl_file, "-g", f"{prolog_rule},halt.", "-t", "halt"]
-            result = subprocess.run(prolog_command, capture_output=True, text=True)
-            if result.stdout.strip() == "False":
-                check_and_alert(False)
 
-            print("*" * 50)
+            # Construct the full path to the Prolog file
+            pl_file = os.path.join(os.path.dirname(__file__), '..', 'Prolog', 'auto_rules.pl')
+            relative_path = os.path.join(os.path.dirname(__file__), '..', 'Prolog', 'auto_rules.pl')
+
+            # 规范化路径，消除 ".."
+            pl_file = os.path.abspath(relative_path)
+
+            # 构造Prolog命令
+            prolog_command = ["swipl", "-s", pl_file, "-g", prolog_rule + ",halt."]
+
+            # Run the Prolog command
+            result = subprocess.run(prolog_command, capture_output=True, text=True)
+            #result = subprocess.run(prolog_command)
+
+            # Print the results
+            print(result.stdout)
+
+            if result.stdout == "False":
+                check_and_alert(False)
+            else:
+                print(colored(f"[Info][{datetime.now()}][LightControl] Device states are normal.", "green"))
+                pass
+            
 
             time.sleep(database_scan_interval)
     except Exception as e:
