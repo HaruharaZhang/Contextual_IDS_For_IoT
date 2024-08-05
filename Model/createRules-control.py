@@ -149,16 +149,15 @@ def check_device(devices, button_press_interval, socket_voltage_threshold, socke
             if device_state['productname'] == "Hue Smart button":
                 prolog_rules.append(device_state['state']['buttonevent'])
                 #prolog_rules.append(device_state['state']['lastupdated'])
-                # 检查开关是否在最近x秒内被按下
 
                 # 设置当前时间为UTC时间，数据库时间也是UTC
                 current_time = datetime.utcnow().replace(tzinfo=pytz.utc)
+                # 检查开关是否在最近x秒内被按下
                 if current_time - datetime.strptime(device_state['state']['lastupdated'], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.utc) <= timedelta(seconds=button_press_interval):
                     prolog_rules.append('switch_pressed')
                 else:
                     prolog_rules.append('switch_unpressed')
-                #witch_state = 'switch_pressed' if any(current_time - datetime.strptime(s['last_event_time'], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.utc) <= timedelta(seconds=8.5) for s in switches) else 'switch_unpressed'
-    
+
                 prolog_rules.append(device_state['state']['reachable'])
                 prolog_rules.append(device_state['uniqueid']) 
         except Exception as e:
@@ -289,6 +288,7 @@ def main():
     db_password = config['db_password']
     db_host = config['db_host']
     exclude_databases = config['exclude_databases']
+    # last_state = True
     
     try:
         while True:
@@ -329,15 +329,16 @@ def main():
             #result = subprocess.run(prolog_command)
 
             # Print the results
-            print(result.stdout)
+            # print(result.stdout)
+            # print(prolog_rule)
 
             if result.stdout == "False":
-                check_and_alert(False)
+                # if last_state == False:
+                    check_and_alert(False)
+                # last_state = False
             else:
-                print(colored(f"[Info][{datetime.now()}][LightControl] Device states are normal.", "green"))
-                pass
-            
-
+                print(colored(f"[Info][{datetime.now()}][CreateRule-Control] Device states are normal.", "green"))
+                # last_state = True
             time.sleep(database_scan_interval)
     except Exception as e:
         print(f"An error occurred: {str(e)}")

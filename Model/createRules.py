@@ -149,8 +149,7 @@ def create_rule(devices, button_press_interval, socket_voltage_threshold, socket
                     prolog_rules.append('switch_pressed')
                 else:
                     prolog_rules.append('switch_unpressed')
-                #witch_state = 'switch_pressed' if any(current_time - datetime.strptime(s['last_event_time'], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=pytz.utc) <= timedelta(seconds=8.5) for s in switches) else 'switch_unpressed'
-    
+
                 prolog_rules.append(device_state['state']['reachable'])
                 prolog_rules.append(device_state['uniqueid']) 
         except Exception as e:
@@ -286,10 +285,15 @@ def main():
             for db_name in databases:
                 devices = fetch_device_states(conn, db_name)
                 new_rule.extend(create_rule(devices, button_press_interval, socket_voltage_threshold, socket_voltage_min, socket_voltage_max))
-            #new_rule.extend(add_sensor_values(sensor_light_threshold, sensor_temperature_threshold))
             light_and_temperature = add_sensor_values(sensor_light_threshold, sensor_temperature_threshold)
-            new_rule.append(light_and_temperature[0])
-            new_rule.append(light_and_temperature[1])
+            if len(light_and_temperature) >= 2:
+                new_rule.append(light_and_temperature[0])
+                new_rule.append(light_and_temperature[1])
+            else:
+                new_rule.append(0)
+                new_rule.append(0)
+            print(new_rule)
+            print(len(prolog_rules_all))
 
             if(new_rule in prolog_rules_all):
                 index = prolog_rules_all.index(new_rule)
