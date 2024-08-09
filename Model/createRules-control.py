@@ -10,6 +10,7 @@ import pytz  # 引入pytz处理时区
 from termcolor import colored
 from datetime import datetime, timedelta
 import subprocess
+import logging
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -252,6 +253,7 @@ def check_and_alert(current_output):
     if last_state is False and current_output is False:
         # 连续两次输出为False，触发警报
         warning_msg = f"[Alert][{datetime.now()}][CreateRules-Control] Device states are not normal!"
+        log_message(warning_msg)
         print(colored(warning_msg, 'red'))
         send_alert('ALERT')
     # 更新上次的状态为当前状态
@@ -274,6 +276,9 @@ def send_alert(alert_type):
     except Exception as e:
         print(f"Failed to read light sensor: {str(e)}")
 
+def log_message(message):
+    logging.info(message)
+
 def main():
     config = load_config()  # 将配置加载为一个字典
     database_scan_interval = config['database_scan_interval']
@@ -288,7 +293,17 @@ def main():
     db_password = config['db_password']
     db_host = config['db_host']
     exclude_databases = config['exclude_databases']
-    # last_state = True
+    last_state = True
+
+    log_folder = os.path.join(os.path.dirname(__file__), '..', 'Log', 'RunLog')
+    log_filename = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".log"
+    log_filepath = os.path.join(log_folder, log_filename)
+    # 设置日志记录格式
+    logging.basicConfig(
+        filename=log_filepath,
+        level=logging.INFO,
+        format="%(message)s"
+    )
     
     try:
         while True:
@@ -333,12 +348,14 @@ def main():
             # print(prolog_rule)
 
             if result.stdout == "False":
-                # if last_state == False:
+                if last_state == False:
                     check_and_alert(False)
-                # last_state = False
+                last_state = False
             else:
-                print(colored(f"[Info][{datetime.now()}][CreateRule-Control] Device states are normal.", "green"))
-                # last_state = True
+                message = colored(f"[Info][{datetime.now()}][CreateRule-Control] Device states are normal.", "green")
+                log_message(message)
+                print(message)
+                last_state = True
             time.sleep(database_scan_interval)
     except Exception as e:
         print(f"An error occurred: {str(e)}")
