@@ -42,10 +42,8 @@ def scan_network(hosts):
                 print(colored("Scanning new device", 'yellow'))
                 scan_content = nm.scan(host, arguments='-A')
                 filename = f"{host}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt"
-                save_path = f"../Log/Network/NewDevice/{filename}"
-                #save_path = os.path.join(os.path.dirname(__file__), '..', 'Log', 'Network', 'NewDevice')
+                save_path = os.path.join(os.path.dirname(__file__), '..', 'Log', 'Network', 'NewDevice', filename)
                 os.makedirs(os.path.dirname(save_path), exist_ok=True)
-                #os.makedirs(save_path, exist_ok=True)
                 with open(save_path, 'w') as file:
                     file.write(str(scan_content))
                 print(colored(f"Scan file saved to: /Log/Network/NewDevice/{filename}", 'yellow'))
